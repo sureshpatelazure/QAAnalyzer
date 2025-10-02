@@ -119,8 +119,16 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
         // Extracts a property value from the log message
         private string ExtractProperty(string message, string property)
         {
-            var match = Regex.Match(message, $@"{property}=([^\r\n]+)");
-            return match.Success ? match.Groups[1].Value.Trim() : null;
+            if (property == "Message")
+            {
+                var match = Regex.Match(message, @"Message=(.*)", RegexOptions.Singleline);
+                return match.Success ? match.Groups[1].Value.Trim() : null;
+            }
+            else
+            {
+                var match = Regex.Match(message, $@"{property}=([^\r\n]+)");
+                return match.Success ? match.Groups[1].Value.Trim() : null;
+            }
         }
 
         /// <summary>

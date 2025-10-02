@@ -12,7 +12,7 @@ var configuration = new ConfigurationBuilder()
 //Semanti Kernel
 var semanticbuilder = Kernel.CreateBuilder();
 LogAnalyzerPlugin logAnalyzerPlugin = new LogAnalyzerPlugin(configuration);
-//logAnalyzerPlugin.ReadErrorLogs("b6ecc8e2-6da2-466d-a0b1-6471fce7f092");
+//logAnalyzerPlugin.GetErrorLogsByErrorID("677503a8-0f0b-4f0f-b783-b59d6133ad3f");
 semanticbuilder.Plugins.AddFromObject(logAnalyzerPlugin);
 
 StagesAnalyzer testCasesAnalyzer = new StagesAnalyzer(configuration);
