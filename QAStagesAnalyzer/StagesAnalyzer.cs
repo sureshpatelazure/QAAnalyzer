@@ -1,0 +1,173 @@
+﻿using Microsoft.SemanticKernel;
+using System.ComponentModel;
+using System.Text.RegularExpressions;
+
+namespace QAAnalyzer.QAStagesAnalyzer
+{
+    public class StagesAnalyzer
+    {
+        private readonly string _logDirectory;
+        private readonly int _takeLast;
+        public StagesAnalyzer(IConfiguration configuration)
+        {
+
+            _logDirectory = configuration["stageslogsdirectory"];
+            _takeLast = int.TryParse(configuration["nooflastruns"], out var n) ? n : 3;
+        }
+
+        /// <summary>
+        /// Extracts scenario execution summaries from all log files in the configured directory.
+        /// </summary>
+        [KernelFunction("ExtractScenarioSummaries")]
+        [Description("Scans all log files and returns a structured summary of scenario execution results, including stage name, datetime, passed, failed, and total scenarios.")]
+        public List<ScenarioSummary> ExtractScenarioSummaries()
+        {
+
+            var summaries = new List<ScenarioSummary>();
+            try
+            {
+                List<(string FilePath, string StageName, string HHMM)> logFiles = GetLastLogFilesByDate(_logDirectory);
+
+                // var pattern = @"^(?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(?<total>\d+)\s+scenarios\s+\((?:(?<failed>\d+)\s+failed,\s+)?(?<passed>\d+)\s+passed\)";
+               // var pattern = @"^(?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(?<total>\d+)\s+scenarios\s+\((?:(?<failed>\d+)\s+failed(?:,\s*)?)?(?:(?<passed>\d+)\s+passed)?\)";
+                var pattern = @"^(?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(?<total>\d+)\s+scenario[s]?\s+\((?:(?<failed>\d+)\s+failed(?:,\s*)?)?(?:(?<passed>\d+)\s+passed)?\)";
+
+                var regex = new Regex(pattern);
+
+                foreach (var lfile in logFiles)
+                {
+                    foreach (var line in File.ReadLines(lfile.FilePath))
+                    {
+                        var match = regex.Match(line);
+                        if (match.Success)
+                        {
+                            summaries.Add(new ScenarioSummary
+                            {
+                                StageName = lfile.StageName,
+                                Datetime = match.Groups["datetime"].Value,
+                                Passed = match.Groups["passed"].Success ? int.Parse(match.Groups["passed"].Value) : 0,
+                                Failed = match.Groups["failed"].Success ? int.Parse(match.Groups["failed"].Value) : 0,
+                                Total = int.Parse(match.Groups["total"].Value)
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorLogPath = Path.Combine(Directory.GetCurrentDirectory(), "error.log");
+                var errorMessage = $"{DateTime.UtcNow:O} - Error: {ex.Message}{Environment.NewLine}{ex.StackTrace}{Environment.NewLine}";
+                 File.AppendAllText(errorLogPath, errorMessage);
+                throw new Exception();
+               
+            }
+            return summaries;
+        }
+
+        /// <summary>
+        /// Returns the last N files from the directory, sorted by the date in the filename (ascending).
+        /// Filename format: Playwright (stagename@yyymmdd) EVV Regression Suite@@20250917
+        /// </summary>
+        /// <param name="directory">Directory to search for files.</param>
+        /// <param name="takeLast">Number of files to return.</param>
+        /// <returns>List of file paths for the last N files in ascending order by date.</returns>
+        private List<(string FilePath, string StageName, string HHMM)> GetLastLogFilesByDate(string directory)
+        {
+            var pattern = @"^(?<stageName>.+)@@(?<date>\d{8})(?<hhmm>\d{4})(?<ss>\d{2})$";
+            var regex = new Regex(pattern);
+
+            var files = Directory.GetFiles(directory);
+            var datedFiles = new List<(string FilePath, string StageName, DateTime Date, string HHMM, string SS)>();
+
+            foreach (var file in files)
+            {
+                var fileName = Path.GetFileNameWithoutExtension(file);
+                var match = regex.Match(fileName);
+                if (match.Success)
+                {
+                    var dateStr = match.Groups["date"].Value;
+                    var hhmm = match.Groups["hhmm"].Value;
+                    var ss = match.Groups["ss"].Value;
+                    var stageName = match.Groups["stageName"].Value;
+                    if (DateTime.TryParseExact(dateStr, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var date))
+                    {
+                        datedFiles.Add((file, stageName, date, hhmm, ss));
+                    }
+                }
+            }
+
+            // Sort by date, hhmm, and ss descending, then take last N per stage
+            var lastFiles = datedFiles
+                .GroupBy(f => f.StageName)
+                .SelectMany(g => g
+                    .OrderByDescending(f => f.Date)
+                    .ThenByDescending(f => f.HHMM)
+                    .ThenByDescending(f => f.SS)
+                    .Take(_takeLast))
+                .Select(f => (f.FilePath, f.StageName, $"{f.HHMM}{f.SS}"))
+                .ToList();
+
+            return lastFiles;
+        }
+
+        /// <summary>
+        /// Scans the last log file for the specified stage and returns a list of failed scenario descriptions.
+        /// </summary>
+        //[KernelFunction("GetFailedScenarios")]
+        //[Description("Scans the last log file for the given stage name and returns a list of failed scenario descriptions.")]
+        //public List<string> GetFailedScenarios(string stageName)
+        //{
+        //    var failedScenarios = new List<string>();
+        //    try
+        //    {
+        //        // Get last log file for the stage
+        //        var logFiles = GetLastLogFilesByDate(_logDirectory)
+        //            .Where(f => f.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase))
+        //            .OrderByDescending(f => f.HHMM)
+        //            .ToList();
+
+        //        if (!logFiles.Any())
+        //            return failedScenarios;
+
+        //        var lastLogFile = logFiles.First().FilePath;
+        //        string currentScenario = null;
+        //        bool scenarioFailed = false;
+
+        //        foreach (var line in File.ReadLines(lastLogFile))
+        //        {
+        //            // Detect scenario start
+        //            var scenarioMatch = Regex.Match(line, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\d+\)\s+Scenario:\s+(.*)$");
+        //            if (scenarioMatch.Success)
+        //            {
+        //                // If previous scenario failed, add its details
+        //                if (scenarioFailed && currentScenario != null)
+        //                {
+        //                    failedScenarios.Add(currentScenario.Trim());
+        //                }
+        //                currentScenario = scenarioMatch.Groups[1].Value;
+        //                scenarioFailed = false;
+        //            }
+        //            // Detect failed step
+        //            if (line.Contains("× "))
+        //            {
+        //                scenarioFailed = true;
+        //            }
+        //        }
+        //        // Check last scenario
+        //        if (scenarioFailed && currentScenario != null)
+        //        {
+        //            failedScenarios.Add(currentScenario.Trim());
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        var errorLogPath = Path.Combine(Directory.GetCurrentDirectory(), "error.log");
+        //        var errorMessage = $"{DateTime.UtcNow:O} - Error: {ex.Message}{Environment.NewLine}{ex.StackTrace}{Environment.NewLine}";
+        //        File.AppendAllText(errorLogPath, errorMessage);
+        //        throw;
+        //    }
+        //    return failedScenarios;
+        //}
+
+    }
+}
