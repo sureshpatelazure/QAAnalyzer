@@ -15,24 +15,13 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
             _logDirectory = configuration["apperrorlogsdirectory"];
         }
 
-        // LogEntry model class
-        public class LogEntry
-        {
-            public DateTime? Timestamp { get; set; }
-            public string ErrorID { get; set; }
-            public string Source { get; set; }
-            public string SERVER { get; set; }
-            public string DESCRIPTION { get; set; }
-            public string Type { get; set; }
-            public string Message { get; set; }
-        }
 
         /// <summary>
         /// Reads and parses all multi-line log files in the configured directory.
         /// </summary>
         /// <param name="errorId">Optional ErrorID to filter logs.</param>
         /// <returns>A list of parsed LogEntry models.</returns>
-        public List<LogEntry> ReadErrorLogs(string errorId = null)
+        private List<LogEntry> ReadErrorLogs(string errorId = null)
         {
             var logEntries = new List<LogEntry>();
 
@@ -134,6 +123,70 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
             return match.Success ? match.Groups[1].Value.Trim() : null;
         }
 
-        // Existing methods...
+        /// <summary>
+        /// Retrieves a list of error log entries. If ErrorID is provided, returns only the matching log entry with full message; 
+        /// if ErrorID is null, returns all log entries without the message property populated.
+        /// </summary>
+        /// <param name="errorId">Optional ErrorID to filter logs. If null, returns all error logs.</param>
+        /// <returns>List of LogEntry models matching the criteria.</returns>
+        [KernelFunction("GetErrorSummaryLogs")]
+        [Description("Returns a summary of error descriptions and their occurrence counts. If DESCRIPTION is present, groups by DESCRIPTION; otherwise, groups by Type.")]
+        public List<ErrorDescriptionSummary> GetErrorSummaryLogs(string errorId = null)
+        {
+            if (!string.IsNullOrEmpty(errorId) && errorId.Equals("null", StringComparison.OrdinalIgnoreCase))
+                errorId = null;
+
+            var logEntries = ReadErrorLogs(errorId);
+
+            var summary = logEntries
+                .GroupBy(e => string.IsNullOrWhiteSpace(e.DESCRIPTION) ? e.Type : e.DESCRIPTION)
+                .Select(g => new ErrorDescriptionSummary
+                {
+                    ErrorDescription = g.Key,
+                    OccurrenceCount = g.Count()
+                })
+                .OrderByDescending(s => s.OccurrenceCount)
+                .ToList();
+
+            return summary;
+        }
+
+        /// <summary>
+        /// Returns all error log entries that match the given error description. 
+        /// If DESCRIPTION is present, filters by DESCRIPTION; otherwise, filters by Type.
+        /// </summary>
+        /// <param name="errorDescription">Error description or type to filter log entries.</param>
+        /// <returns>List of LogEntry models matching the description or type.</returns>
+        [KernelFunction("GetErrorLogsByDescription")]
+        [Description("Returns all error log entries that match the given error description. If DESCRIPTION is present, filters by DESCRIPTION; otherwise, filters by Type.")]
+        public List<LogEntry> GetErrorLogsByDescription(string errorDescription)
+        {
+            var logEntries = ReadErrorLogs();
+
+            var filtered = logEntries
+                .Where(e =>
+                    (!string.IsNullOrWhiteSpace(e.DESCRIPTION) && e.DESCRIPTION.Equals(errorDescription, StringComparison.OrdinalIgnoreCase)) ||
+                    (string.IsNullOrWhiteSpace(e.DESCRIPTION) && !string.IsNullOrWhiteSpace(e.Type) && e.Type.Equals(errorDescription, StringComparison.OrdinalIgnoreCase))
+                )
+                .ToList();
+
+            return filtered;
+        }
+
+        /// <summary>
+        /// Returns all error log entries that match the given ErrorID (case-insensitive).
+        /// </summary>
+        /// <param name="errorId">ErrorID to filter log entries.</param>
+        /// <returns>List of LogEntry models matching the ErrorID.</returns>
+        [KernelFunction("GetErrorLogsByErrorID")]
+        [Description("Returns all error log entries that match the given ErrorID (case-insensitive).")]
+        public List<LogEntry> GetErrorLogsByErrorID(string errorId)
+        {
+            if (string.IsNullOrWhiteSpace(errorId))
+                return new List<LogEntry>();
+
+           return ReadErrorLogs(errorId);
+
+        }
     }
 }
