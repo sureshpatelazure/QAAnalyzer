@@ -113,61 +113,72 @@ namespace QAAnalyzer.QAStagesAnalyzer
         /// <summary>
         /// Scans the last log file for the specified stage and returns a list of failed scenario descriptions.
         /// </summary>
-        //[KernelFunction("GetFailedScenarios")]
-        //[Description("Scans the last log file for the given stage name and returns a list of failed scenario descriptions.")]
-        //public List<string> GetFailedScenarios(string stageName)
-        //{
-        //    var failedScenarios = new List<string>();
-        //    try
-        //    {
-        //        // Get last log file for the stage
-        //        var logFiles = GetLastLogFilesByDate(_logDirectory)
-        //            .Where(f => f.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase))
-        //            .OrderByDescending(f => f.HHMM)
-        //            .ToList();
+        [KernelFunction("GetFailedScenarios")]
+        [Description("Scans the last log file for the given stage name and returns a list of failed scenario descriptions.")]
+        public List<FailedScenarioInfo> GetFailedScenarios(string stageName)
+        {
+            var failedScenarios = new List<FailedScenarioInfo>();
+            try
+            {
+                var logFiles = GetLastLogFilesByDate(_logDirectory)
+                    .Where(f => f.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
 
-        //        if (!logFiles.Any())
-        //            return failedScenarios;
+                if (!logFiles.Any())
+                    return failedScenarios;
 
-        //        var lastLogFile = logFiles.First().FilePath;
-        //        string currentScenario = null;
-        //        bool scenarioFailed = false;
+                var lastLogFile = logFiles.First().FilePath;
+                string currentDatetime = null;
+                string currentScenario = null;
+                bool inFailureSection = false;
 
-        //        foreach (var line in File.ReadLines(lastLogFile))
-        //        {
-        //            // Detect scenario start
-        //            var scenarioMatch = Regex.Match(line, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+\d+\)\s+Scenario:\s+(.*)$");
-        //            if (scenarioMatch.Success)
-        //            {
-        //                // If previous scenario failed, add its details
-        //                if (scenarioFailed && currentScenario != null)
-        //                {
-        //                    failedScenarios.Add(currentScenario.Trim());
-        //                }
-        //                currentScenario = scenarioMatch.Groups[1].Value;
-        //                scenarioFailed = false;
-        //            }
-        //            // Detect failed step
-        //            if (line.Contains("× "))
-        //            {
-        //                scenarioFailed = true;
-        //            }
-        //        }
-        //        // Check last scenario
-        //        if (scenarioFailed && currentScenario != null)
-        //        {
-        //            failedScenarios.Add(currentScenario.Trim());
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        var errorLogPath = Path.Combine(Directory.GetCurrentDirectory(), "error.log");
-        //        var errorMessage = $"{DateTime.UtcNow:O} - Error: {ex.Message}{Environment.NewLine}{ex.StackTrace}{Environment.NewLine}";
-        //        File.AppendAllText(errorLogPath, errorMessage);
-        //        throw;
-        //    }
-        //    return failedScenarios;
-        //}
+                var failureRegex = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+Failures:");
+                var warningRegex = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+Warnings:");
+
+                foreach (var line in File.ReadLines(lastLogFile))
+                {
+                    if (warningRegex.IsMatch(line))
+                        break;
+
+                    if (failureRegex.IsMatch(line))
+                    {
+                        inFailureSection = true;
+                        continue;
+                    }
+
+                    if (!inFailureSection)
+                        continue;
+
+                    var scenarioMatch = Regex.Match(line, @"^(?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z).*\bScenario:\s+(?<scenario>.+)$");
+                    if (scenarioMatch.Success)
+                    {
+                        currentDatetime = scenarioMatch.Groups["datetime"].Value;
+                        currentScenario = scenarioMatch.Groups["scenario"].Value;
+                        continue;
+                    }
+
+                    if (line.Contains("??") && currentScenario != null)
+                    {
+                        failedScenarios.Add(new FailedScenarioInfo
+                        {
+                            Datetime = currentDatetime,
+                            ScenarioName = currentScenario,
+                            ErrorDescription = line.Trim()
+                        });
+                        currentScenario = null;
+                        currentDatetime = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorLogPath = Path.Combine(Directory.GetCurrentDirectory(), "error.log");
+                var errorMessage = $"{DateTime.UtcNow:O} - Error: {ex.Message}{Environment.NewLine}{ex.StackTrace}{Environment.NewLine}";
+                File.AppendAllText(errorLogPath, errorMessage);
+                throw;
+            }
+            return failedScenarios;
+        }
 
     }
 }

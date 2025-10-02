@@ -18,7 +18,7 @@ LogAnalyzerPlugin logAnalyzerPlugin = new LogAnalyzerPlugin(configuration);
 semanticbuilder.Plugins.AddFromObject(logAnalyzerPlugin);
 
 StagesAnalyzer testCasesAnalyzer = new StagesAnalyzer(configuration);
-//testCasesAnalyzer.GetFailedScenarios("HS Smoke_WEB06 - Playwright Suite - Scale");
+//testCasesAnalyzer.GetFailedScenarios("HS Smoke_WEB05 - Playwright Suite - Scale");
 semanticbuilder.Plugins.AddFromObject(testCasesAnalyzer);
 
 var semantickernel = semanticbuilder.Build();
