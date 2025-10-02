@@ -1,5 +1,6 @@
 ﻿using Microsoft.SemanticKernel;
 using System.ComponentModel;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace QAAnalyzer.QAStagesAnalyzer
@@ -134,9 +135,13 @@ namespace QAAnalyzer.QAStagesAnalyzer
 
                 var failureRegex = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+Failures:");
                 var warningRegex = new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+Warnings:");
+                var scenarioRegex = new Regex(@"^(?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z).*\bScenario:\s+(?<scenario>.+)$");
 
-                foreach (var line in File.ReadLines(lastLogFile))
+                var lines = File.ReadLines(lastLogFile).ToList();
+                for (int i = 0; i < lines.Count; i++)
                 {
+                    var line = lines[i];
+
                     if (warningRegex.IsMatch(line))
                         break;
 
@@ -149,7 +154,7 @@ namespace QAAnalyzer.QAStagesAnalyzer
                     if (!inFailureSection)
                         continue;
 
-                    var scenarioMatch = Regex.Match(line, @"^(?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z).*\bScenario:\s+(?<scenario>.+)$");
+                    var scenarioMatch = scenarioRegex.Match(line);
                     if (scenarioMatch.Success)
                     {
                         currentDatetime = scenarioMatch.Groups["datetime"].Value;
@@ -159,14 +164,27 @@ namespace QAAnalyzer.QAStagesAnalyzer
 
                     if (line.Contains("??") && currentScenario != null)
                     {
+                        var errorDescription = new StringBuilder();
+                        errorDescription.AppendLine(line.Trim());
+
+                        // Read subsequent lines until warningRegex or next scenarioMatch
+                        int j = i + 1;
+                        for (; j < lines.Count; j++)
+                        {
+                            var nextLine = lines[j];
+                            if (warningRegex.IsMatch(nextLine) || scenarioRegex.IsMatch(nextLine))
+                                break;
+                            errorDescription.AppendLine(nextLine.Trim());
+                        }
                         failedScenarios.Add(new FailedScenarioInfo
                         {
                             Datetime = currentDatetime,
                             ScenarioName = currentScenario,
-                            ErrorDescription = line.Trim()
+                            ErrorDescription = errorDescription.ToString().TrimEnd()
                         });
                         currentScenario = null;
                         currentDatetime = null;
+                        i = j - 1; // Continue from where we stopped
                     }
                 }
             }

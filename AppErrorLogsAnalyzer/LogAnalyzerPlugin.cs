@@ -40,7 +40,6 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
             // Order by last write time descending and take only the 3 most recent files
             logFiles = logFiles
                 .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
-                .Take(3)
                 .ToList();
 
             var logEntryPattern = new Regex(
@@ -122,16 +121,16 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
         // Extracts a property value from the log message
         private string ExtractProperty(string message, string property)
         {
-            if (property == "Message")
-            {
-                var match = Regex.Match(message, @"Message=(.*)", RegexOptions.Singleline);
-                return match.Success ? match.Groups[1].Value.Trim() : null;
-            }
-            else
-            {
+            //if (property == "Message")
+            //{
+            //    var match = Regex.Match(message, @"Message=(.*)", RegexOptions.Singleline);
+            //    return match.Success ? match.Groups[1].Value.Trim() : null;
+            //}
+            //else
+            //{
                 var match = Regex.Match(message, $@"{property}=([^\r\n]+)");
                 return match.Success ? match.Groups[1].Value.Trim() : null;
-            }
+            //}
         }
 
         /// <summary>

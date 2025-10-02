@@ -13,12 +13,12 @@ var configuration = new ConfigurationBuilder()
 var semanticbuilder = Kernel.CreateBuilder();
 LogAnalyzerPlugin logAnalyzerPlugin = new LogAnalyzerPlugin(configuration);
 //logAnalyzerPlugin.GetErrorSummaryLogs();
-//logAnalyzerPlugin.GetErrorLogsByErrorID("677503a8-0f0b-4f0f-b783-b59d6133ad3f");
-//logAnalyzerPlugin.GetErrorLogsByDateRange(Convert.ToDateTime("2025-09-30 18:52"), Convert.ToDateTime("2025-09-30 19:00"));
+//var data =logAnalyzerPlugin.GetErrorLogsByErrorID("677503a8-0f0b-4f0f-b783-b59d6133ad3f");
+//var data = logAnalyzerPlugin.GetErrorLogsByDateRange(Convert.ToDateTime("2025-09-30 18:52"), Convert.ToDateTime("2025-09-30 19:00"));
 semanticbuilder.Plugins.AddFromObject(logAnalyzerPlugin);
 
 StagesAnalyzer testCasesAnalyzer = new StagesAnalyzer(configuration);
-//testCasesAnalyzer.GetFailedScenarios("HS Smoke_WEB05 - Playwright Suite - Scale");
+//var data =testCasesAnalyzer.GetFailedScenarios("HS Smoke_WEB05 - Playwright Suite - Scale");
 semanticbuilder.Plugins.AddFromObject(testCasesAnalyzer);
 
 var semantickernel = semanticbuilder.Build();
