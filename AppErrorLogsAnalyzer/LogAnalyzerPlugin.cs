@@ -196,5 +196,32 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
            return ReadErrorLogs(errorId);
 
         }
+
+        /// <summary>
+        /// Returns all error log entries within the specified date range, 
+        /// including entries 2 minutes before startDate and 2 minutes after endDate.
+        /// </summary>
+        /// <param name="startDate">Start date (inclusive), mandatory.</param>
+        /// <param name="endDate">End date (inclusive), mandatory.</param>
+        /// <returns>List of LogEntry models within the buffered date range.</returns>
+        [KernelFunction("GetErrorLogsByDateRange")]
+        [Description("Returns all error log entries within the specified date range, including a 2-minute buffer before startDate and after endDate.")]
+        public List<LogEntry> GetErrorLogsByDateRange(DateTime startDate, DateTime endDate)
+        {
+            // Apply 2-minute buffer
+            var bufferedStart = startDate.AddMinutes(-2);
+            var bufferedEnd = endDate.AddMinutes(2);
+
+            var logEntries = ReadErrorLogs();
+
+            var filtered = logEntries
+                .Where(e => e.Timestamp.HasValue &&
+                            e.Timestamp.Value >= bufferedStart &&
+                            e.Timestamp.Value <= bufferedEnd)
+                .ToList();
+
+            return filtered;
+        }
+
     }
 }
