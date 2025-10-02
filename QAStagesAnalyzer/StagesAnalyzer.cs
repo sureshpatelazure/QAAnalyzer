@@ -174,7 +174,8 @@ namespace QAAnalyzer.QAStagesAnalyzer
                             var nextLine = lines[j];
                             if (warningRegex.IsMatch(nextLine) || scenarioRegex.IsMatch(nextLine))
                                 break;
-                            errorDescription.AppendLine(nextLine.Trim());
+                            if(string.IsNullOrEmpty(errorDescription.ToString()))
+                                errorDescription.AppendLine(nextLine.Trim());
                         }
                         failedScenarios.Add(new FailedScenarioInfo
                         {
