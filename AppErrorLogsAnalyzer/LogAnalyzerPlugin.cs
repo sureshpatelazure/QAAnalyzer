@@ -9,10 +9,12 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
     public class LogAnalyzerPlugin
     {
         private readonly string _logDirectory;
+        private readonly int _nooferrorlogsfiles;
 
         public LogAnalyzerPlugin(IConfiguration configuration)
         {
             _logDirectory = configuration["apperrorlogsdirectory"];
+            _nooferrorlogsfiles = int.TryParse(configuration["nooferrorlogsfiles"], out var n) ? n : 2;
         }
 
 
@@ -28,11 +30,12 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
             // Get all *.log files and Error.Harmony.log.1/2 files
             var logFiles = Directory.GetFiles(_logDirectory, "Error.Harmony.log").ToList();
 
-            //var harmonyFiles = new[] { "Error.Harmony.log.1", "Error.Harmony.log.2" }
-            //    .Select(f => Path.Combine(_logDirectory, f))
-            //    .Where(File.Exists);
 
-           // logFiles.AddRange(harmonyFiles);
+            var harmonyFiles = Enumerable.Range(1, _nooferrorlogsfiles)
+                .Select(i => Path.Combine(_logDirectory, $"Error.Harmony.log.{i}"))
+                .Where(File.Exists);
+
+            logFiles.AddRange(harmonyFiles);
 
             // Order by last write time descending and take only the 3 most recent files
             logFiles = logFiles
