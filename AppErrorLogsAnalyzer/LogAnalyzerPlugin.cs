@@ -225,5 +225,77 @@ namespace QAAnalyzer.AppErrorLogsAnalyzer
             return filtered;
         }
 
+        /// <summary>
+        /// Scans logs for entries with an ErrorID and extracts the error, and root cause.
+        /// </summary>
+        /// <returns>List of ErrorRootCauseInfo models with ErrorID, Error, and RootCause.</returns>
+        [KernelFunction("GetErrorsWithRootCause")]
+        [Description("Scans logs for entries with an ErrorID and extracts the error, and root cause.")]
+        public List<ErrorRootCauseInfo> GetErrorsWithRootCause()
+        {
+            var errorInfos = new List<ErrorRootCauseInfo>();
+            var logFiles = Directory.GetFiles(_logDirectory, "Error.Harmony.log").ToList();
+
+            var harmonyFiles = Enumerable.Range(1, _nooferrorlogsfiles)
+                .Select(i => Path.Combine(_logDirectory, $"Error.Harmony.log.{i}"))
+                .Where(File.Exists);
+
+            logFiles.AddRange(harmonyFiles);
+
+            logFiles = logFiles
+                .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
+                .ToList();
+
+            var logEntryPattern = new Regex(
+                @"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) \[(ERROR)\](.+?)(?=^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \[|\z)",
+                RegexOptions.Multiline | RegexOptions.Singleline
+            );
+
+            foreach (var file in logFiles)
+            {
+                string content;
+                using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var reader = new StreamReader(stream))
+                {
+                    content = reader.ReadToEnd();
+                }
+
+                var matches = logEntryPattern.Matches(content);
+
+                foreach (Match match in matches)
+                {
+                    if (match.Success)
+                    {
+                        var fullMessage = match.Groups[3].Value.Trim();
+                        var errorId = ExtractProperty(fullMessage, "ErrorID");
+
+                        if (!string.IsNullOrEmpty(errorId))
+                        {
+                            var error = ExtractProperty(fullMessage, "Message");
+                            var rootCause = ExtractRootCause(fullMessage);
+
+                            errorInfos.Add(new ErrorRootCauseInfo
+                            {
+                                ErrorID = errorId,
+                                Error = error,
+                                RootCause = rootCause
+                            });
+                        }
+                    }
+                }
+            }
+
+            return errorInfos;
+        }
+
+        private string ExtractRootCause(string message)
+        {
+            var match = Regex.Match(message, @"Root Cause:([\s\S]*)", RegexOptions.Multiline);
+            if (match.Success)
+            {
+                return match.Groups[1].Value.Trim();
+            }
+            return null;
+        }
     }
 }
